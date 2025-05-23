@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Money Tracker</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Money Tracker</h1>
+
+  <form id="transaction-form">
+    <input type="text" id="description" placeholder="Deskripsi" required />
+    <input type="number" id="amount" placeholder="Jumlah" required />
+    <select id="type">
+      <option value="income">Pemasukan</option>
+      <option value="expense">Pengeluaran</option>
+    </select>
+    <button type="submit">Tambah</button>
+  </form>
+
+  <h2>Daftar Transaksi</h2>
+  <ul id="transaction-list"></ul>
+
+  <h3>Total: <span id="total">0</span></h3>
+
+  <script src="script.js"></script>
+</body>
+</html>
