@@ -6,25 +6,35 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 require("dotenv").config();
 
+const Transaction = require("./models/Transaction");
+const User = require("./models/User");
+
 const app = express();
 
-app.use(cors());
+// Middleware
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.static("public"));
 
-// Session setup
+// Session
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "secret",
+    secret: process.env.SESSION_SECRET || "someSecret",
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
   })
 );
 
-// Passport setup
+// Passport init
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Google Strategy
 passport.use(
   new GoogleStrategy(
     {
@@ -32,21 +42,37 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: "/auth/google/callback",
     },
-    (accessToken, refreshToken, profile, done) => {
-      return done(null, profile);
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ googleId: profile.id });
+        if (!user) {
+          user = await User.create({
+            googleId: profile.id,
+            name: profile.displayName,
+            email: profile.emails?.[0]?.value,
+            photo: profile.photos?.[0]?.value,
+          });
+        }
+        done(null, user);
+      } catch (err) {
+        done(err, null);
+      }
     }
   )
 );
 
+// Serialize user into session
 passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+// Deserialize user from session
+passport.deserializeUser(async (id, done) => {
+  const user = await User.findById(id);
   done(null, user);
 });
 
-passport.deserializeUser((obj, done) => {
-  done(null, obj);
-});
-
-// MongoDB connection
+// Connect MongoDB
 mongoose.connect(
   process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker",
   {
@@ -55,10 +81,39 @@ mongoose.connect(
   }
 );
 
-// Model
-const Transaction = require("./models/Transaction");
+// Routes
 
-// API endpoints
+// Google login
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req, res) => {
+    res.redirect("/"); // redirect ke home setelah login sukses
+  }
+);
+
+// Logout
+app.get("/logout", (req, res) => {
+  req.logout(() => {
+    res.redirect("/");
+  });
+});
+
+// Get current user
+app.get("/api/user", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json(req.user);
+  } else {
+    res.status(401).json({ error: "Not authenticated" });
+  }
+});
+
+// Transactions
 app.get("/api/transactions", async (req, res) => {
   const transactions = await Transaction.find();
   res.json(transactions);
@@ -70,24 +125,8 @@ app.post("/api/transactions", async (req, res) => {
   res.json(transaction);
 });
 
-// Google OAuth routes
-app.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () =>
+  console.log(`Server running on http://localhost:${PORT}`)
 );
-
-app.get(
-  "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => {
-    res.redirect("/");
-  }
-);
-
-app.get("/logout", (req, res) => {
-  req.logout(() => {
-    res.redirect("/");
-  });
-});
-
-app.listen(3000, () => console.log("Server running on http://localhost:3000"));

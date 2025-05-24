@@ -6,10 +6,10 @@
 </head>
 <body>
   <h1>Money Tracker</h1>
-
+  
+  <div id="user-info"></div>
   <a href="/auth/google">Login with Google</a>
   <a href="/logout">Logout</a>
-
 
   <form id="transaction-form">
     <input type="text" id="description" placeholder="Deskripsi" required />
@@ -27,5 +27,17 @@
   <h3>Total: <span id="total">0</span></h3>
 
   <script src="script.js"></script>
+  <script>
+    fetch('/api/user')
+      .then(res => res.json())
+      .then(user => {
+        if (user.name) {
+          document.getElementById('user-info').innerText = `Hello, ${user.name}`;
+        }
+      })
+      .catch(() => {
+        document.getElementById('user-info').innerText = 'Not logged in';
+      });
+  </script>
 </body>
 </html>
