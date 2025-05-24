@@ -94,7 +94,6 @@ function isLoggedIn(req, res, next) {
 
 // API routes
 app.get("/api/transactions", isLoggedIn, async (req, res) => {
-  console.log("User:", req.user);
   const transactions = await Transaction.find({ userId: req.user.id });
   res.json(transactions);
 });
