@@ -15,8 +15,6 @@ if (!process.env.MONGODB_URI) {
 // 🔗 Koneksi ke MongoDB
 mongoose
   .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
   })
   .then(() => console.log("✅ Terkoneksi ke MongoDB Atlas"))
   .catch((err) => {
