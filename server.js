@@ -1,36 +1,64 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const app = express();
-
-// 🌐 Load environment variables from .env file (for local dev)
+const session = require("express-session");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
 require("dotenv").config();
 
-// 🔐 Cek apakah MONGODB_URI tersedia
-if (!process.env.MONGODB_URI) {
-  console.error("❌ MONGODB_URI tidak ditemukan di environment variable!");
-  process.exit(1); // hentikan server
-}
+const app = express();
 
-// 🔗 Koneksi ke MongoDB
-mongoose
-  .connect(process.env.MONGODB_URI, {
-  })
-  .then(() => console.log("✅ Terkoneksi ke MongoDB Atlas"))
-  .catch((err) => {
-    console.error("❌ Gagal konek ke MongoDB:", err);
-    process.exit(1);
-  });
-
-// 🔧 Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// 📦 Model
+// Session setup
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
+
+// Passport setup
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "/auth/google/callback",
+    },
+    (accessToken, refreshToken, profile, done) => {
+      return done(null, profile);
+    }
+  )
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user);
+});
+
+passport.deserializeUser((obj, done) => {
+  done(null, obj);
+});
+
+// MongoDB connection
+mongoose.connect(
+  process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker",
+  {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }
+);
+
+// Model
 const Transaction = require("./models/Transaction");
 
-// 📡 Routes
+// API endpoints
 app.get("/api/transactions", async (req, res) => {
   const transactions = await Transaction.find();
   res.json(transactions);
@@ -42,8 +70,24 @@ app.post("/api/transactions", async (req, res) => {
   res.json(transaction);
 });
 
-// 🚀 Start Server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
+// Google OAuth routes
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
 );
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req, res) => {
+    res.redirect("/");
+  }
+);
+
+app.get("/logout", (req, res) => {
+  req.logout(() => {
+    res.redirect("/");
+  });
+});
+
+app.listen(3000, () => console.log("Server running on http://localhost:3000"));
