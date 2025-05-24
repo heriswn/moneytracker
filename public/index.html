@@ -6,7 +6,7 @@
 </head>
 <body>
   <h1>Money Tracker</h1>
-  
+
   <div id="user-info"></div>
   <a href="/auth/google">Login with Google</a>
   <a href="/logout">Logout</a>
@@ -28,7 +28,9 @@
 
   <script src="script.js"></script>
   <script>
-    fetch('/api/user')
+    fetch('/api/user', {
+      credentials: 'include'
+    })
       .then(res => res.json())
       .then(user => {
         if (user.name) {
