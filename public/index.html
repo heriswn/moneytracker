@@ -1,45 +1,94 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Money Tracker</title>
-  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <h1>Money Tracker</h1>
 
-  <div id="user-info"></div>
-  <a href="/auth/google">Login with Google</a>
-  <a href="/logout">Logout</a>
+  <div id="user-section">
+    <button id="login-btn">Login with Google</button>
+    <button id="logout-btn" style="display: none;">Logout</button>
+    <p id="user-info"></p>
+  </div>
 
-  <form id="transaction-form">
-    <input type="text" id="description" placeholder="Deskripsi" required />
-    <input type="number" id="amount" placeholder="Jumlah" required />
-    <select id="type">
-      <option value="income">Pemasukan</option>
-      <option value="expense">Pengeluaran</option>
-    </select>
-    <button type="submit">Tambah</button>
-  </form>
+  <hr />
 
-  <h2>Daftar Transaksi</h2>
+  <div id="transaction-form" style="display: none;">
+    <input type="text" id="description" placeholder="Description" />
+    <input type="number" id="amount" placeholder="Amount" />
+    <button onclick="addTransaction()">Add Transaction</button>
+  </div>
+
+  <h3>Transactions</h3>
   <ul id="transaction-list"></ul>
 
-  <h3>Total: <span id="total">0</span></h3>
-
-  <script src="script.js"></script>
   <script>
-    fetch('/api/user', {
-      credentials: 'include'
-    })
-      .then(res => res.json())
-      .then(user => {
-        if (user.name) {
-          document.getElementById('user-info').innerText = `Hello, ${user.name}`;
-        }
-      })
-      .catch(() => {
-        document.getElementById('user-info').innerText = 'Not logged in';
+    async function getUser() {
+      const res = await fetch('/api/user', { credentials: 'include' });
+      const data = await res.json();
+      return data.user;
+    }
+
+    async function refreshUI() {
+      const user = await getUser();
+      const loginBtn = document.getElementById('login-btn');
+      const logoutBtn = document.getElementById('logout-btn');
+      const userInfo = document.getElementById('user-info');
+      const form = document.getElementById('transaction-form');
+
+      if (user) {
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+        userInfo.innerText = `Hello, ${user.name}`;
+        form.style.display = 'block';
+        loadTransactions();
+      } else {
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+        userInfo.innerText = '';
+        form.style.display = 'none';
+      }
+    }
+
+    async function loadTransactions() {
+      const res = await fetch('/api/transactions', { credentials: 'include' });
+      const data = await res.json();
+      const list = document.getElementById('transaction-list');
+      list.innerHTML = '';
+      data.forEach(tx => {
+        const li = document.createElement('li');
+        li.textContent = `${tx.description}: $${tx.amount}`;
+        list.appendChild(li);
       });
+    }
+
+    async function addTransaction() {
+      const description = document.getElementById('description').value;
+      const amount = document.getElementById('amount').value;
+      await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ description, amount }),
+      });
+      loadTransactions();
+    }
+
+    document.getElementById('login-btn').addEventListener('click', () => {
+      window.location.href = '/auth/google';
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      window.location.href = '/auth/logout';
+    });
+
+    refreshUI();
   </script>
 </body>
+
 </html>
