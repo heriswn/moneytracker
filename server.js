@@ -69,7 +69,7 @@ app.get(
 );
 
 app.get(
-  process.env.GOOGLE_CALLBACK_URL || "/auth/google/callback",
+  "/auth/google/callback",
   passport.authenticate("google", {
     failureRedirect: "/",
     successRedirect: "/", // redirect to home
