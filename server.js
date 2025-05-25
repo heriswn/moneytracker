@@ -1,5 +1,3 @@
-// server.js (versi lengkap dengan Google OAuth + Email/Password login)
-
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
@@ -28,7 +26,7 @@ app.use(express.json());
 app.use(express.static("public"));
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "secret",
+    secret: process.env.SESSION_SECRET || "secret", // Gunakan salah satu nilai default yang Anda inginkan
     resave: false,
     saveUninitialized: false,
   })
@@ -121,18 +119,7 @@ app.post("/api/transactions", async (req, res) => {
 
 app.listen(3000, () => console.log("Server running on http://localhost:3000"));
 
-const authRoutes = require("./routes/auth");
+const authRoutes = require("./routes/auth"); // Pastikan file ini ada
 app.use("/auth", authRoutes);
 
-require("./config/passport-config")(passport);
-
-const session = require("express-session");
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
+require("./config/passport-config")(passport); // Pastikan file ini ada
