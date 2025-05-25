@@ -6,6 +6,8 @@ const session = require("express-session");
 const MongoStore = require("connect-mongo");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const LocalStrategy = require("passport-local").Strategy;
+const bcrypt = require("bcrypt");
 const path = require("path");
 const cors = require("cors");
 const Transaction = require("./models/Transaction");
@@ -17,7 +19,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
-
+app.use(express.urlencoded({ extended: true }));
 
 app.use(
   session({
@@ -29,8 +31,8 @@ app.use(
       collectionName: "sessions",
     }),
     cookie: {
-      secure: true, // Gunakan true jika menggunakan HTTPS
-      maxAge: 1000 * 60 * 60 * 24, // 1 hari
+      secure: false,
+      maxAge: 1000 * 60 * 60 * 24,
     },
   })
 );
@@ -47,7 +49,7 @@ mongoose.connect(
   }
 );
 
-// Passport config
+// Passport config: Google
 passport.use(
   new GoogleStrategy(
     {
@@ -69,6 +71,20 @@ passport.use(
   )
 );
 
+// Passport config: Local
+passport.use(
+  new LocalStrategy(
+    { usernameField: "email" },
+    async (email, password, done) => {
+      const user = await User.findOne({ email });
+      if (!user || !user.password) return done(null, false);
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) return done(null, false);
+      return done(null, user);
+    }
+  )
+);
+
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
@@ -78,13 +94,12 @@ passport.deserializeUser(async (id, done) => {
   done(null, user);
 });
 
-// Middleware to protect routes
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) return next();
   res.redirect("/login.html");
 }
 
-// Auth routes
+// Auth routes: Google
 app.get(
   "/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -96,6 +111,31 @@ app.get(
   (req, res) => {
     res.redirect("/");
   }
+);
+
+// Auth routes: Email/Password
+app.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).send("Email already exists");
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ email, password: hashedPassword });
+    req.login(user, (err) => {
+      if (err) return res.status(500).send("Login failed");
+      res.redirect("/");
+    });
+  } catch (err) {
+    res.status(500).send("Registration error");
+  }
+});
+
+app.post(
+  "/login",
+  passport.authenticate("local", {
+    successRedirect: "/",
+    failureRedirect: "/login.html",
+  })
 );
 
 app.get("/logout", (req, res) => {
