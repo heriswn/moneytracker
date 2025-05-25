@@ -10,7 +10,6 @@ const LocalStrategy = require("passport-local").Strategy;
 const bcrypt = require("bcrypt");
 const path = require("path");
 const cors = require("cors");
-
 const Transaction = require("./models/Transaction");
 const User = require("./models/User");
 
@@ -19,10 +18,10 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
+app.use(express.urlencoded({ extended: true }));
 
-// Session
+// Session configuration
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "default_secret",
@@ -39,11 +38,11 @@ app.use(
   })
 );
 
-// Passport
+// Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
 
-// MongoDB
+// MongoDB connection
 mongoose.connect(
   process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker",
   {
@@ -52,7 +51,7 @@ mongoose.connect(
   }
 );
 
-// Passport Google Strategy
+// Passport configuration: Google Strategy
 passport.use(
   new GoogleStrategy(
     {
@@ -63,7 +62,6 @@ passport.use(
     async (accessToken, refreshToken, profile, done) => {
       try {
         let user = await User.findOne({ googleId: profile.id });
-
         if (!user) {
           user = await User.create({
             googleId: profile.id,
@@ -71,38 +69,27 @@ passport.use(
             email: profile.emails?.[0]?.value || "",
           });
         }
-
         return done(null, user);
       } catch (err) {
-        return done(err);
+        return done(err, null);
       }
     }
   )
 );
 
-// Passport Local Strategy
+// Passport configuration: Local Strategy
 passport.use(
   new LocalStrategy(
     { usernameField: "email" },
     async (email, password, done) => {
       try {
+        console.log("Login attempt:", email);
         const user = await User.findOne({ email });
-
-        if (!user) {
-          return done(null, false, { message: "Email tidak ditemukan" });
-        }
-
-        if (!user.password) {
-          return done(null, false, {
-            message: "Akun ini menggunakan Google login",
-          });
-        }
-
+        if (!user || !user.password)
+          return done(null, false, { message: "Invalid credentials" });
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-          return done(null, false, { message: "Password salah" });
-        }
-
+        if (!isMatch)
+          return done(null, false, { message: "Invalid credentials" });
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -111,27 +98,29 @@ passport.use(
   )
 );
 
-passport.serializeUser((user, done) => done(null, user.id));
+// Serialize and deserialize user
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
     done(null, user);
   } catch (err) {
-    done(err);
+    done(err, null);
   }
 });
 
-// Middleware untuk proteksi
+// Middleware to ensure user is authenticated
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) return next();
   res.redirect("/login.html");
 }
 
-// ========================
-//       Auth Routes
-// ========================
+// Routes
 
-// Google
+// Google Authentication
 app.get(
   "/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
@@ -145,80 +134,73 @@ app.get(
   }
 );
 
-// Register
+// Registration
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
   try {
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).send("Email sudah terdaftar");
-
+    if (existingUser) return res.status(400).send("Email already exists");
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await User.create({ email, password: hashedPassword });
-
-    req.login(newUser, (err) => {
-      if (err) return res.status(500).send("Login gagal setelah registrasi");
+    const user = await User.create({ email, password: hashedPassword });
+    req.login(user, (err) => {
+      if (err) return res.status(500).send("Login failed");
       res.redirect("/");
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).send("Terjadi kesalahan saat registrasi");
+    res.status(500).send("Registration error");
   }
 });
 
 // Login
-app.post("/login", (req, res, next) => {
-  passport.authenticate("local", (err, user, info) => {
-    if (err) return next(err);
-    if (!user) return res.redirect("/login.html");
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      return res.redirect("/");
-    });
-  })(req, res, next);
-});
+app.post(
+  "/login",
+  passport.authenticate("local", {
+    successRedirect: "/",
+    failureRedirect: "/login.html",
+  })
+);
 
 // Logout
 app.get("/logout", (req, res, next) => {
-  req.logout((err) => {
-    if (err) return next(err);
+  req.logout(function (err) {
+    if (err) {
+      return next(err);
+    }
     res.redirect("/login.html");
   });
 });
 
-// ========================
-//       API Routes
-// ========================
+// API routes
 app.get("/api/transactions", ensureAuthenticated, async (req, res) => {
   try {
     const transactions = await Transaction.find({ user: req.user._id });
     res.json(transactions);
   } catch (err) {
-    res.status(500).json({ error: "Gagal mengambil data transaksi" });
+    res.status(500).send("Error fetching transactions");
   }
 });
 
 app.post("/api/transactions", ensureAuthenticated, async (req, res) => {
   const { description, amount } = req.body;
   try {
-    const newTransaction = new Transaction({
+    const transaction = new Transaction({
       description,
       amount,
       user: req.user._id,
     });
-    await newTransaction.save();
-    res.json(newTransaction);
+    await transaction.save();
+    res.json(transaction);
   } catch (err) {
-    res.status(500).json({ error: "Gagal menyimpan transaksi" });
+    res.status(500).send("Error saving transaction");
   }
 });
 
-// Serve halaman utama jika login
+// Serve index.html only if user is authenticated
 app.get("/", ensureAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Start server
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`✅ Server running on http://localhost:${PORT}`)
