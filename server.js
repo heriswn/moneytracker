@@ -1,20 +1,34 @@
 require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const LocalStrategy = require("passport-local").Strategy;
-const User = require("./models/User");
-const Transaction = require("./models/Transaction");
+const path = require("path");
 const cors = require("cors");
-const bcrypt = require("bcrypt");
-const dotenv = require("dotenv");
-
-dotenv.config();
+const Transaction = require("./models/Transaction");
+const User = require("./models/User");
 
 const app = express();
 
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static("public"));
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "default_secret",
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// MongoDB connection
 mongoose.connect(
   process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker",
   {
@@ -23,26 +37,7 @@ mongoose.connect(
   }
 );
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-app.use(express.static("public"));
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "secret", // Gunakan salah satu nilai default yang Anda inginkan
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
-
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  const user = await User.findById(id);
-  done(null, user);
-});
-
-// Google OAuth
+// Passport config
 passport.use(
   new GoogleStrategy(
     {
@@ -53,79 +48,75 @@ passport.use(
     async (accessToken, refreshToken, profile, done) => {
       let user = await User.findOne({ googleId: profile.id });
       if (!user) {
-        user = await User.create({ googleId: profile.id });
+        user = await User.create({
+          googleId: profile.id,
+          displayName: profile.displayName,
+          email: profile.emails?.[0]?.value || "",
+        });
       }
       return done(null, user);
     }
   )
 );
 
-// Local Strategy
-passport.use(
-  new LocalStrategy(
-    { usernameField: "email" },
-    async (email, password, done) => {
-      const user = await User.findOne({ email });
-      if (!user) return done(null, false, { message: "Email not registered" });
-      const match = await user.comparePassword(password);
-      if (!match) return done(null, false, { message: "Incorrect password" });
-      return done(null, user);
-    }
-  )
-);
-
-// Auth Routes
-app.get("/", ensureAuthenticated, (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+passport.serializeUser((user, done) => {
+  done(null, user.id);
 });
 
+passport.deserializeUser(async (id, done) => {
+  const user = await User.findById(id);
+  done(null, user);
+});
+
+// Middleware to protect routes
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  res.redirect("/login.html");
+}
+
+// Auth routes
 app.get(
   "/auth/google",
-  passport.authenticate("google", { scope: ["profile"] })
+  passport.authenticate("google", { scope: ["profile", "email"] })
 );
+
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
+  passport.authenticate("google", { failureRedirect: "/login.html" }),
   (req, res) => {
     res.redirect("/");
   }
 );
 
-app.post("/auth/register", async (req, res) => {
-  const { email, password } = req.body;
-  const existing = await User.findOne({ email });
-  if (existing)
-    return res.status(400).json({ message: "Email already registered" });
-  const user = new User({ email, password });
-  await user.save();
-  res.json({ message: "User registered" });
-});
-
-app.post("/auth/login", passport.authenticate("local"), (req, res) => {
-  res.json({ message: "Login successful", user: req.user });
-});
-
-app.get("/auth/logout", (req, res) => {
-  req.logout(() => res.redirect("/"));
+app.get("/logout", (req, res) => {
+  req.logout(() => {
+    res.redirect("/login.html");
+  });
 });
 
 // API routes
-app.get("/api/transactions", async (req, res) => {
-  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-  const transactions = await Transaction.find({ userId: req.user._id });
+app.get("/api/transactions", ensureAuthenticated, async (req, res) => {
+  const transactions = await Transaction.find({ user: req.user._id });
   res.json(transactions);
 });
 
-app.post("/api/transactions", async (req, res) => {
-  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-  const transaction = new Transaction({ ...req.body, userId: req.user._id });
+app.post("/api/transactions", ensureAuthenticated, async (req, res) => {
+  const { description, amount } = req.body;
+  const transaction = new Transaction({
+    description,
+    amount,
+    user: req.user._id,
+  });
   await transaction.save();
   res.json(transaction);
 });
 
-app.listen(3000, () => console.log("Server running on http://localhost:3000"));
+// Serve index.html only if user is authenticated
+app.get("/", ensureAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-const authRoutes = require("./routes/auth"); // Pastikan file ini ada
-app.use("/auth", authRoutes);
-
-require("./config/passport-config")(passport); // Pastikan file ini ada
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () =>
+  console.log(`✅ Server running on http://localhost:${PORT}`)
+);
