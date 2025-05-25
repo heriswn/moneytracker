@@ -62,7 +62,7 @@
       list.innerHTML = '';
       data.forEach(tx => {
         const li = document.createElement('li');
-        li.textContent = `${tx.description}: $${tx.amount}`;
+        li.textContent = `${tx.description}: ${tx.amount}`;
         list.appendChild(li);
       });
     }
