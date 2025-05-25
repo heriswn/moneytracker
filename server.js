@@ -28,6 +28,10 @@ app.use(
       mongoUrl: process.env.MONGODB_URI,
       collectionName: "sessions",
     }),
+    cookie: {
+      secure: true, // Gunakan true jika menggunakan HTTPS
+      maxAge: 1000 * 60 * 60 * 24, // 1 hari
+    },
   })
 );
 
