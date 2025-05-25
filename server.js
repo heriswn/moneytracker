@@ -31,7 +31,7 @@ app.use(
       collectionName: "sessions",
     }),
     cookie: {
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
       maxAge: 1000 * 60 * 60 * 24,
     },
   })
@@ -138,11 +138,15 @@ app.post(
   })
 );
 
-app.get("/logout", (req, res) => {
-  req.logout(() => {
+app.get("/logout", (req, res, next) => {
+  req.logout(function (err) {
+    if (err) {
+      return next(err);
+    }
     res.redirect("/login.html");
   });
 });
+
 
 // API routes
 app.get("/api/transactions", ensureAuthenticated, async (req, res) => {
