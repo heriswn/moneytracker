@@ -195,6 +195,17 @@ app.post("/api/transactions", ensureAuthenticated, async (req, res) => {
   }
 });
 
+app.get("/api/user", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({
+      email: req.user.email,
+      displayName: req.user.displayName,
+    });
+  } else {
+    res.status(401).json({ message: "Not authenticated" });
+  }
+});
+
 // Serve index.html only if user is authenticated
 app.get("/", ensureAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

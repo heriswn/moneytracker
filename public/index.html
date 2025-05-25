@@ -29,9 +29,15 @@
 
   <script>
     async function getUser() {
-      const res = await fetch('/api/user', { credentials: 'include' });
-      const data = await res.json();
-      return data.user;
+      try {
+        const res = await fetch('/api/user', { credentials: 'include' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data; // <- langsung return objek user
+      } catch (err) {
+        console.error('Error fetching user:', err);
+        return null;
+      }
     }
 
     async function refreshUI() {
@@ -44,7 +50,7 @@
       if (user) {
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
-        userInfo.innerText = `Hello, ${user.name}`;
+        userInfo.innerText = `Hello, ${user.displayName || user.email}`;
         form.style.display = 'block';
         loadTransactions();
       } else {
@@ -84,7 +90,7 @@
     });
 
     document.getElementById('logout-btn').addEventListener('click', () => {
-      window.location.href = '/auth/logout';
+      window.location.href = '/logout'; // <- sudah diperbaiki
     });
 
     refreshUI();
