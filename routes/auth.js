@@ -5,6 +5,13 @@ const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const router = express.Router();
 
+function ensureAuthenticated(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+  res.redirect("/login.html");
+}
+
 // Google OAuth
 router.get(
   "/google",

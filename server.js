@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const session = require("express-session");
@@ -9,6 +10,7 @@ const Transaction = require("./models/Transaction");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const dotenv = require("dotenv");
+
 dotenv.config();
 
 const app = express();
@@ -73,6 +75,10 @@ passport.use(
 );
 
 // Auth Routes
+app.get("/", ensureAuthenticated, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.get(
   "/auth/google",
   passport.authenticate("google", { scope: ["profile"] })
