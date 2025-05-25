@@ -124,7 +124,6 @@ app.listen(3000, () => console.log("Server running on http://localhost:3000"));
 const authRoutes = require("./routes/auth");
 app.use("/auth", authRoutes);
 
-const passport = require("passport");
 require("./config/passport-config")(passport);
 
 const session = require("express-session");
