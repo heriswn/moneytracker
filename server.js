@@ -10,6 +10,7 @@ const LocalStrategy = require("passport-local").Strategy;
 const bcrypt = require("bcrypt");
 const path = require("path");
 const cors = require("cors");
+
 const Transaction = require("./models/Transaction");
 const User = require("./models/User");
 
@@ -18,10 +19,10 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static("public"));
 
-// Session configuration
+// Session config
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "default_secret",
@@ -38,7 +39,7 @@ app.use(
   })
 );
 
-// Initialize Passport
+// Passport initialization
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -51,7 +52,7 @@ mongoose.connect(
   }
 );
 
-// Passport configuration: Google Strategy
+// Passport: Google Strategy
 passport.use(
   new GoogleStrategy(
     {
@@ -71,19 +72,18 @@ passport.use(
         }
         return done(null, user);
       } catch (err) {
-        return done(err, null);
+        return done(err);
       }
     }
   )
 );
 
-// Passport configuration: Local Strategy
+// Passport: Local Strategy
 passport.use(
   new LocalStrategy(
     { usernameField: "email" },
     async (email, password, done) => {
       try {
-        console.log("Login attempt:", email);
         const user = await User.findOne({ email });
         if (!user || !user.password)
           return done(null, false, { message: "Invalid credentials" });
@@ -98,50 +98,46 @@ passport.use(
   )
 );
 
-// Serialize and deserialize user
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
+// Serialize/deserialize user
+passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
     done(null, user);
   } catch (err) {
-    done(err, null);
+    done(err);
   }
 });
 
-// Middleware to ensure user is authenticated
+// Auth middleware
 function ensureAuthenticated(req, res, next) {
   if (req.isAuthenticated()) return next();
   res.redirect("/login.html");
 }
 
-// Routes
+// ===== Routes =====
 
-// Google Authentication
+// Google auth
 app.get(
   "/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
-
 app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login.html" }),
-  (req, res) => {
-    res.redirect("/");
-  }
+  (req, res) => res.redirect("/")
 );
 
-// Registration
+// Register
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).send("Email already exists");
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({ email, password: hashedPassword });
+
     req.login(user, (err) => {
       if (err) return res.status(500).send("Login failed");
       res.redirect("/");
@@ -163,14 +159,24 @@ app.post(
 // Logout
 app.get("/logout", (req, res, next) => {
   req.logout(function (err) {
-    if (err) {
-      return next(err);
-    }
+    if (err) return next(err);
     res.redirect("/login.html");
   });
 });
 
-// API routes
+// Get user (safe for unauthenticated fetch)
+app.get("/api/user", (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({
+      email: req.user.email,
+      displayName: req.user.displayName,
+    });
+  } else {
+    res.status(200).json(null); // ✅ important to avoid JSON parse error
+  }
+});
+
+// Transactions
 app.get("/api/transactions", ensureAuthenticated, async (req, res) => {
   try {
     const transactions = await Transaction.find({ user: req.user._id });
@@ -195,24 +201,13 @@ app.post("/api/transactions", ensureAuthenticated, async (req, res) => {
   }
 });
 
-app.get("/api/user", (req, res) => {
-  if (req.isAuthenticated()) {
-    res.json({
-      email: req.user.email,
-      displayName: req.user.displayName,
-    });
-  } else {
-    res.status(401).json({ message: "Not authenticated" });
-  }
-});
-
-// Serve index.html only if user is authenticated
+// Serve homepage
 app.get("/", ensureAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Start the server
+// Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () =>
-  console.log(`✅ Server running on http://localhost:${PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+});
