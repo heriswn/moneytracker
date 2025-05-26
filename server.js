@@ -53,10 +53,7 @@ app.use(passport.session());
 
 // MongoDB connection
 mongoose.connect(
-  process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker",
-  {
-    useUnifiedTopology: true,
-  }
+  process.env.MONGODB_URI || "mongodb://localhost:27017/moneytracker"
 );
 
 // Passport: Google Strategy
