@@ -1,16 +1,8 @@
-// routes/auth.js
 const express = require("express");
 const passport = require("passport");
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const router = express.Router();
-
-function ensureAuthenticated(req, res, next) {
-  if (req.isAuthenticated && req.isAuthenticated()) {
-    return next();
-  }
-  res.redirect("/login.html");
-}
 
 // Google OAuth
 router.get(
@@ -33,22 +25,33 @@ router.post("/register", async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "User already exists" });
-    const user = new User({ email, password });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ email, password: hashedPassword });
     await user.save();
-    res.status(200).json({ message: "User registered" });
+
+    // Auto login setelah register
+    req.login(user, (err) => {
+      if (err) return res.status(500).json({ message: "Login error" });
+      res.json({ email: user.email });
+    });
   } catch (err) {
     res.status(500).json({ message: "Error registering user" });
   }
 });
 
 // Login with email & password
-router.post(
-  "/login",
-  passport.authenticate("local", {
-    successRedirect: "/",
-    failureRedirect: "/login.html",
-  })
-);
+router.post("/login", (req, res, next) => {
+  passport.authenticate("local", (err, user, info) => {
+    if (err) return next(err);
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+
+    req.login(user, (err) => {
+      if (err) return next(err);
+      res.json({ email: user.email });
+    });
+  })(req, res, next);
+});
 
 // Logout
 router.get("/logout", (req, res) => {
