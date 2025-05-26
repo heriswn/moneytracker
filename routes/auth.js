@@ -44,11 +44,12 @@ router.post("/register", async (req, res) => {
 router.post("/login", (req, res, next) => {
   passport.authenticate("local", (err, user, info) => {
     if (err) return next(err);
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
-
-    req.login(user, (err) => {
+    if (!user) {
+      return res.status(401).json({ message: info?.message || "Login failed" });
+    }
+    req.logIn(user, (err) => {
       if (err) return next(err);
-      res.json({ email: user.email });
+      return res.status(200).json({ message: "Login successful" });
     });
   })(req, res, next);
 });
