@@ -16,6 +16,14 @@
     <p id="user-info"></p>
   </div>
 
+  <!-- Tambahkan form login/register -->
+  <div id="auth-form">
+    <input type="email" id="email" placeholder="Email" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="loginWithEmail()">Login</button>
+    <button onclick="registerWithEmail()">Register</button>
+  </div>
+
   <hr />
 
   <div id="transaction-form" style="display: none;">
@@ -33,7 +41,7 @@
         const res = await fetch('/api/user', { credentials: 'include' });
         if (!res.ok) return null;
         const data = await res.json();
-        return data; // <- langsung return objek user
+        return data;
       } catch (err) {
         console.error('Error fetching user:', err);
         return null;
@@ -46,18 +54,21 @@
       const logoutBtn = document.getElementById('logout-btn');
       const userInfo = document.getElementById('user-info');
       const form = document.getElementById('transaction-form');
+      const authForm = document.getElementById('auth-form');
 
       if (user) {
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
         userInfo.innerText = `Hello, ${user.displayName || user.email}`;
         form.style.display = 'block';
+        authForm.style.display = 'none';
         loadTransactions();
       } else {
         loginBtn.style.display = 'inline-block';
         logoutBtn.style.display = 'none';
         userInfo.innerText = '';
         form.style.display = 'none';
+        authForm.style.display = 'block';
       }
     }
 
@@ -83,6 +94,42 @@
         body: JSON.stringify({ description, amount }),
       });
       loadTransactions();
+    }
+
+    async function loginWithEmail() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        refreshUI();
+      } else {
+        alert('Login failed');
+      }
+    }
+
+    async function registerWithEmail() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const res = await fetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        refreshUI();
+      } else {
+        alert('Registration failed');
+      }
     }
 
     document.getElementById('login-btn').addEventListener('click', () => {
